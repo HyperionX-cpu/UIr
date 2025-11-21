@@ -3,6 +3,7 @@ local httpService = game:GetService('HttpService')
 local SaveManager = {} do
     SaveManager.Folder = 'LinoriaLibSettings'
     SaveManager.Ignore = {}
+
     SaveManager.Parser = {
         Toggle = {
             Save = function(idx, object) 
@@ -49,7 +50,7 @@ local SaveManager = {} do
                 return { type = 'KeyPicker', idx = idx, mode = object.Mode, key = object.Value }
             end,
             Load = function(idx, data)
-                if Options[idx] then 
+                if Options[idx] then
                     Options[idx]:SetValue({ data.key, data.mode })
                 end
             end,
@@ -66,6 +67,32 @@ local SaveManager = {} do
         },
     }
 
+    -------------------------------------------------------------------
+    -- THEME APPLY FUNCTION (BLACK / WHITE / RED)
+    -------------------------------------------------------------------
+    local function ApplyTheme()
+        if Options.BackgroundColor then
+            Options.BackgroundColor:SetValueRGB(Color3.fromHex("#000000")) -- black
+        end
+
+        if Options.MainColor then
+            Options.MainColor:SetValueRGB(Color3.fromHex("#000000")) -- black
+        end
+
+        if Options.AccentColor then
+            Options.AccentColor:SetValueRGB(Color3.fromHex("#B00000")) -- red
+        end
+
+        if Options.OutlineColor then
+            Options.OutlineColor:SetValueRGB(Color3.fromHex("#B00000")) -- red
+        end
+
+        if Options.FontColor then
+            Options.FontColor:SetValueRGB(Color3.fromHex("#FFFFFF")) -- white
+        end
+    end
+    -------------------------------------------------------------------
+
     function SaveManager:SetIgnoreIndexes(list)
         for _, key in next, list do
             self.Ignore[key] = true
@@ -78,9 +105,7 @@ local SaveManager = {} do
     end
 
     function SaveManager:Save(name)
-        if not name then
-            return false, 'no config file is selected'
-        end
+        if not name then return false, 'no config file is selected' end
 
         local fullPath = self.Folder .. '/settings/' .. name .. '.json'
         local data = { objects = {} }
@@ -91,29 +116,26 @@ local SaveManager = {} do
         end
 
         for idx, option in next, Options do
-            if not self.Parser[option.Type] or self.Ignore[idx] then continue end
+            if self.Ignore[idx] then continue end
+            if not self.Parser[option.Type] then continue end
             table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
-        end    
-
-        local success, encoded = pcall(httpService.JSONEncode, httpService, data)
-        if not success then
-            return false, 'failed to encode data'
         end
+
+        local ok, encoded = pcall(httpService.JSONEncode, httpService, data)
+        if not ok then return false, 'failed to encode data' end
 
         writefile(fullPath, encoded)
         return true
     end
 
     function SaveManager:Load(name)
-        if not name then
-            return false, 'no config file is selected'
-        end
-        
+        if not name then return false, 'no config file is selected' end
+
         local file = self.Folder .. '/settings/' .. name .. '.json'
         if not isfile(file) then return false, 'invalid file' end
 
-        local success, decoded = pcall(httpService.JSONDecode, httpService, readfile(file))
-        if not success then return false, 'decode error' end
+        local ok, decoded = pcall(httpService.JSONDecode, httpService, readfile(file))
+        if not ok then return false, 'decode error' end
 
         for _, option in next, decoded.objects do
             if self.Parser[option.type] then
@@ -123,28 +145,8 @@ local SaveManager = {} do
             end
         end
 
-        -- APPLY DARK RED THEME AFTER LOADING
-        task.defer(function()
-            if Options.AccentColor then
-                Options.AccentColor:SetValueRGB(Color3.fromHex("#8B0000"))
-            end
-            
-            if Options.BackgroundColor then
-                Options.BackgroundColor:SetValueRGB(Color3.fromHex("#000000"))
-            end
-            
-            if Options.MainColor then
-                Options.MainColor:SetValueRGB(Color3.fromHex("#8B0000"))
-            end
-            
-            if Options.OutlineColor then
-                Options.OutlineColor:SetValueRGB(Color3.fromHex("#8B0000"))
-            end
-            
-            if Options.FontColor then
-                Options.FontColor:SetValueRGB(Color3.fromHex("#FFFFFF"))
-            end
-        end)
+        -- APPLY THE BLACK / WHITE / RED THEME AFTER LOADING
+        task.defer(ApplyTheme)
 
         return true
     end
@@ -152,7 +154,7 @@ local SaveManager = {} do
     function SaveManager:IgnoreThemeSettings()
         self:SetIgnoreIndexes({ 
             "BackgroundColor", "MainColor", "AccentColor", "OutlineColor", "FontColor",
-            "ThemeManager_ThemeList", 'ThemeManager_CustomThemeList', 'ThemeManager_CustomThemeName',
+            "ThemeManager_ThemeList","ThemeManager_CustomThemeList","ThemeManager_CustomThemeName"
         })
     end
 
@@ -163,10 +165,9 @@ local SaveManager = {} do
             self.Folder .. '/settings'
         }
 
-        for i = 1, #paths do
-            local str = paths[i]
-            if not isfolder(str) then
-                makefolder(str)
+        for _, path in ipairs(paths) do
+            if not isfolder(path) then
+                makefolder(path)
             end
         end
     end
@@ -178,12 +179,10 @@ local SaveManager = {} do
         for _, file in next, list do
             if file:match("%.json$") then
                 local name = file:match("([^/\\]+)%.json$")
-                if name then
-                    table.insert(out, name)
-                end
+                if name then table.insert(out, name) end
             end
         end
-        
+
         return out
     end
 
@@ -194,11 +193,11 @@ local SaveManager = {} do
     function SaveManager:LoadAutoloadConfig()
         if isfile(self.Folder .. '/settings/autoload.txt') then
             local name = readfile(self.Folder .. '/settings/autoload.txt')
-            local success, err = self:Load(name)
-            if not success then
+            local ok, err = self:Load(name)
+            if not ok then
                 return self.Library:Notify('Failed to load autoload config: ' .. err)
             end
-            self.Library:Notify(string.format('Auto loaded config %q', name))
+            self.Library:Notify(('Auto loaded config %q'):format(name))
         end
     end
 
@@ -218,32 +217,35 @@ local SaveManager = {} do
                 return self.Library:Notify('Invalid config name (empty)', 2)
             end
 
-            local success, err = self:Save(name)
-            if not success then
+            local ok, err = self:Save(name)
+            if not ok then
                 return self.Library:Notify('Failed to save config: ' .. err)
             end
 
-            self.Library:Notify(string.format('Created config %q', name))
+            self.Library:Notify(('Created config %q'):format(name))
             Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
             Options.SaveManager_ConfigList:SetValue(nil)
-        end):AddButton('Load config', function()
+        end)
+        :AddButton('Load config', function()
             local name = Options.SaveManager_ConfigList.Value
-            local success, err = self:Load(name)
-            if not success then
+            local ok, err = self:Load(name)
+            if not ok then
                 return self.Library:Notify('Failed to load config: ' .. err)
             end
-            self.Library:Notify(string.format('Loaded config %q', name))
+            self.Library:Notify(('Loaded config %q'):format(name))
         end)
 
         section:AddButton('Overwrite config', function()
             local name = Options.SaveManager_ConfigList.Value
-            if not name then return self.Library:Notify('Select a config first') end
+            if not name then 
+                return self.Library:Notify('Select a config first') 
+            end
 
-            local success, err = self:Save(name)
-            if not success then
+            local ok, err = self:Save(name)
+            if not ok then
                 return self.Library:Notify('Failed to overwrite config: ' .. err)
             end
-            self.Library:Notify(string.format('Overwrote config %q', name))
+            self.Library:Notify(('Overwrote config %q'):format(name))
         end)
 
         section:AddButton('Refresh list', function()
@@ -253,10 +255,13 @@ local SaveManager = {} do
 
         section:AddButton('Set as autoload', function()
             local name = Options.SaveManager_ConfigList.Value
-            if not name then return self.Library:Notify('Select a config first') end
+            if not name then 
+                return self.Library:Notify('Select a config first') 
+            end
+
             writefile(self.Folder .. '/settings/autoload.txt', name)
             SaveManager.AutoloadLabel:SetText('Current autoload config: ' .. name)
-            self.Library:Notify(string.format('Set %q to auto load', name))
+            self.Library:Notify(('Set %q to auto load'):format(name))
         end)
 
         SaveManager.AutoloadLabel = section:AddLabel('Current autoload config: none', true)
@@ -271,27 +276,12 @@ local SaveManager = {} do
 
     SaveManager:BuildFolderTree()
 
-    -- APPLY DARK RED THEME ON STARTUP
+    -------------------------------------------------------------------
+    -- APPLY THEME ON STARTUP
+    -------------------------------------------------------------------
     task.spawn(function()
         repeat task.wait() until Options.AccentColor
-
-        Options.AccentColor:SetValueRGB(Color3.fromHex("#8B0000"))
-
-        if Options.BackgroundColor then
-            Options.BackgroundColor:SetValueRGB(Color3.fromHex("#000000"))
-        end
-
-        if Options.MainColor then
-            Options.MainColor:SetValueRGB(Color3.fromHex("#8B0000"))
-        end
-
-        if Options.OutlineColor then
-            Options.OutlineColor:SetValueRGB(Color3.fromHex("#8B0000"))
-        end
-
-        if Options.FontColor then
-            Options.FontColor:SetValueRGB(Color3.fromHex("#FFFFFF"))
-        end
+        ApplyTheme()
     end)
 end
 
